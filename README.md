@@ -46,7 +46,7 @@ keeps downloading; re-add its magnet to import it).
 | `queue` | tracks downloads, polls the client, triggers imports |
 | `server` | JSON API + serves the embedded Svelte SPA |
 | `internal/webui` | `go:embed` of the frontend build (generated, not committed) |
-| `web` | Svelte 5 (no SvelteKit) frontend, built by Vite |
+| `web` | Svelte 5 + TypeScript (no SvelteKit) frontend, built by Vite |
 
 ## Build & run
 
@@ -54,7 +54,7 @@ The frontend build output (`internal/webui/dist`) is generated, not committed.
 Build it first (requires Bun), then build the Go binary:
 
 ```sh
-make build          # cd web && bun install && bun run build, then go build
+make build          # cd web && bun install && bun run check && bun run build, then go build
 ./bin/downloadarr-lite -config config.yaml
 ```
 
@@ -78,6 +78,10 @@ go run ./cmd/downloadarr-lite
 # terminal 2: Vite dev server on :5173 (proxies /api to :8080)
 cd web && bun run dev
 ```
+
+`svelte-check` type-checks the frontend (`make check`, or `bun run check` from
+`web/`). It runs as part of `make build`; `bun run check:watch` watches for
+changes during development.
 
 ## API
 

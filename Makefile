@@ -1,11 +1,14 @@
 # Build the Svelte app, then the Go binary with the assets embedded.
-.PHONY: build web run tidy clean
+.PHONY: build web check run tidy clean
 
 build: web
 	go build -o bin/downloadarr-lite ./cmd/downloadarr-lite
 
 web:
-	cd web && bun install && bun run build
+	cd web && bun install && bun run check && bun run build
+
+check:
+	cd web && bun run check
 
 run:
 	go run ./cmd/downloadarr-lite

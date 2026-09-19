@@ -1,11 +1,26 @@
-<script>
-  let { download, metadataEnabled = false } = $props()
+<script lang="ts">
+  import {
+    errorMessage,
+    type ApiError,
+    type Candidate,
+    type Download,
+    type MatchInput,
+    type MediaType,
+  } from './types'
 
-  let type = $state('movie')
+  let {
+    download,
+    metadataEnabled = false,
+  }: {
+    download: Download
+    metadataEnabled?: boolean
+  } = $props()
+
+  let type = $state<MediaType>('movie')
   let season = $state(0)
   let episode = $state(0)
   let query = $state('')
-  let results = $state(null)
+  let results = $state<Candidate[] | null>(null)
   let searching = $state(false)
   let applying = $state(false)
   let error = $state('')
@@ -20,7 +35,7 @@
   const candidates = $derived(results ?? download.match?.candidates ?? [])
 
   $effect(() => {
-    const m = download.match ?? {}
+    const m = download.match
     const key = `${m.tmdbId ?? 0}:${m.status ?? ''}:${m.mediaType ?? ''}:${m.season ?? 0}:${m.episode ?? 0}`
     if (key === syncKey) return
     syncKey = key
@@ -32,7 +47,7 @@
     results = null
   })
 
-  async function search(event) {
+  async function search(event: SubmitEvent) {
     event.preventDefault()
     const value = query.trim()
     if (!value || searching) return
@@ -41,16 +56,16 @@
     try {
       const res = await fetch(`/api/search?type=${type}&query=${encodeURIComponent(value)}`)
       const body = await res.json().catch(() => [])
-      if (!res.ok) throw new Error(body.message || `Search failed (${res.status})`)
-      results = Array.isArray(body) ? body : []
+      if (!res.ok) throw new Error((body as ApiError).message || `Search failed (${res.status})`)
+      results = Array.isArray(body) ? (body as Candidate[]) : []
     } catch (err) {
-      error = err.message
+      error = errorMessage(err)
     } finally {
       searching = false
     }
   }
 
-  async function patch(body) {
+  async function patch(body: MatchInput) {
     if (applying) return
     applying = true
     error = ''
@@ -60,24 +75,24 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const data = await res.json().catch(() => ({}))
+      const data = (await res.json().catch(() => ({}))) as ApiError
       if (!res.ok) throw new Error(data.message || `Update failed (${res.status})`)
       results = null
     } catch (err) {
-      error = err.message
+      error = errorMessage(err)
     } finally {
       applying = false
     }
   }
 
-  function choose(candidate) {
+  function choose(candidate: Candidate) {
     const tv = candidate.mediaType === 'tv'
     patch({
       mediaType: candidate.mediaType,
       tmdbId: candidate.tmdbId,
       season: tv ? season : 0,
       episode: tv ? episode : 0,
-    })
+    } as MatchInput)
   }
 
   function applyManual() {
@@ -88,7 +103,7 @@
       year: manualYear,
       season: tv ? season : 0,
       episode: tv ? episode : 0,
-    })
+    } as MatchInput)
   }
 </script>
 

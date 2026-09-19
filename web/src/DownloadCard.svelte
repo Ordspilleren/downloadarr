@@ -1,16 +1,27 @@
-<script>
+<script lang="ts">
   import MatchPanel from './MatchPanel.svelte'
+  import type { Download } from './types'
 
-  let { download, metadataEnabled = false, onremove } = $props()
+  let {
+    download,
+    metadataEnabled = false,
+    onremove,
+  }: {
+    download: Download
+    metadataEnabled?: boolean
+    onremove: (hash: string) => void
+  } = $props()
 
   let editing = $state(false)
 
   const percent = $derived(Math.round((download.progress ?? 0) * 100))
   const removable = $derived(download.status === 'completed' || download.status === 'failed')
-  const match = $derived(download.match ?? {})
+  const match = $derived(download.match)
   const heading = $derived(match.title || download.name || download.hash)
+  const season = $derived(match.season ?? 0)
+  const episode = $derived(match.episode ?? 0)
 
-  const matchLabels = {
+  const matchLabels: Record<string, string> = {
     pending: 'looking up…',
     matched: 'auto-matched',
     manual: 'corrected',
@@ -40,9 +51,9 @@
     {#if match.year}
       <span class="badge">{match.year}</span>
     {/if}
-    {#if match.mediaType === 'tv' && match.season > 0}
+    {#if match.mediaType === 'tv' && season > 0}
       <span class="badge">
-        S{String(match.season).padStart(2, '0')}{#if match.episode > 0}E{String(match.episode).padStart(2, '0')}{/if}
+        S{String(season).padStart(2, '0')}{#if episode > 0}E{String(episode).padStart(2, '0')}{/if}
       </span>
     {/if}
     <span class="badge match-{match.status}">{matchLabel}</span>

@@ -1,8 +1,9 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte'
   import DownloadCard from './DownloadCard.svelte'
+  import { errorMessage, type ApiError, type Download, type StatusResponse } from './types'
 
-  let downloads = $state([])
+  let downloads = $state<Download[]>([])
   let magnet = $state('')
   let submitting = $state(false)
   let error = $state('')
@@ -10,7 +11,7 @@
   let connected = $state(false)
   let metadataEnabled = $state(false)
 
-  async function add(event) {
+  async function add(event: SubmitEvent) {
     event.preventDefault()
     error = ''
     const value = magnet.trim()
@@ -23,18 +24,18 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ magnet: value }),
       })
-      const body = await res.json().catch(() => ({}))
+      const body = (await res.json().catch(() => ({}))) as ApiError
       if (!res.ok) throw new Error(body.message || `Request failed (${res.status})`)
       magnet = ''
       // The new download arrives over the SSE stream below.
     } catch (err) {
-      error = err.message
+      error = errorMessage(err)
     } finally {
       submitting = false
     }
   }
 
-  async function remove(hash) {
+  async function remove(hash: string) {
     await fetch(`/api/downloads/${hash}`, { method: 'DELETE' })
     // The removal arrives over the SSE stream below.
   }
@@ -42,7 +43,7 @@
   onMount(() => {
     fetch('/api/status')
       .then((res) => (res.ok ? res.json() : null))
-      .then((body) => {
+      .then((body: StatusResponse | null) => {
         if (body) metadataEnabled = body.metadataEnabled
       })
       .catch(() => {})
@@ -52,9 +53,9 @@
     source.onopen = () => {
       connected = true
     }
-    source.onmessage = (event) => {
+    source.onmessage = (event: MessageEvent<string>) => {
       try {
-        downloads = JSON.parse(event.data)
+        downloads = JSON.parse(event.data) as Download[]
         connected = true
         loaded = true
       } catch {
