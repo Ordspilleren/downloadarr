@@ -1,0 +1,216 @@
+// Package server exposes the JSON API and serves the embedded web interface.
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+
+	"github.com/Ordspilleren/downloadarr-lite/metadata"
+	"github.com/Ordspilleren/downloadarr-lite/queue"
+)
+
+// Server owns the HTTP lifecycle.
+type Server struct {
+	echo *echo.Echo
+	q    *queue.Queue
+	meta *metadata.Client
+}
+
+// New builds the server: /api/downloads backs the web interface, and every
+// other path is served from webFS (the embedded SPA).
+func New(q *queue.Queue, meta *metadata.Client, webFS fs.FS) *Server {
+	e := echo.New()
+	e.HideBanner = true
+	e.HidePort = true
+	e.Use(middleware.RequestLogger())
+
+	s := &Server{echo: e, q: q, meta: meta}
+	api := e.Group("/api")
+	api.GET("/downloads", s.listDownloads)
+	api.POST("/downloads", s.addDownload)
+	api.DELETE("/downloads/:hash", s.removeDownload)
+	api.PATCH("/downloads/:hash/match", s.setMatch)
+	api.GET("/search", s.search)
+	api.GET("/status", s.status)
+	api.GET("/events", s.streamEvents)
+	e.GET("/*", spaHandler(webFS))
+
+	return s
+}
+
+// Open starts the HTTP server and blocks until it stops.
+func (s *Server) Open(addr string) error {
+	return s.echo.Start(addr)
+}
+
+// Stop shuts the server down gracefully.
+func (s *Server) Stop(ctx context.Context) error {
+	return s.echo.Shutdown(ctx)
+}
+
+func (s *Server) listDownloads(c echo.Context) error {
+	return c.JSON(http.StatusOK, s.q.List())
+}
+
+type addRequest struct {
+	Magnet string `json:"magnet"`
+}
+
+func (s *Server) addDownload(c echo.Context) error {
+	var req addRequest
+	if err := c.Bind(&req); err != nil {
+		return fail(c, http.StatusBadRequest, "invalid request body")
+	}
+	req.Magnet = strings.TrimSpace(req.Magnet)
+	if req.Magnet == "" {
+		return fail(c, http.StatusBadRequest, "magnet link is required")
+	}
+
+	d, err := s.q.Add(req.Magnet)
+	switch {
+	case errors.Is(err, queue.ErrDuplicate):
+		return fail(c, http.StatusConflict, "this magnet is already being downloaded")
+	case err != nil:
+		return fail(c, http.StatusBadRequest, err.Error())
+	}
+	return c.JSON(http.StatusCreated, d)
+}
+
+func (s *Server) removeDownload(c echo.Context) error {
+	if !s.q.Remove(c.Param("hash")) {
+		return fail(c, http.StatusNotFound, "download not found or still active")
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// setMatch records the metadata correction the user made for a download.
+func (s *Server) setMatch(c echo.Context) error {
+	var in queue.MatchInput
+	if err := c.Bind(&in); err != nil {
+		return fail(c, http.StatusBadRequest, "invalid request body")
+	}
+	d, err := s.q.SetMatch(c.Param("hash"), in)
+	switch {
+	case errors.Is(err, queue.ErrNotFound):
+		return fail(c, http.StatusNotFound, "download not found")
+	case err != nil:
+		return fail(c, http.StatusBadRequest, err.Error())
+	}
+	return c.JSON(http.StatusOK, d)
+}
+
+// search proxies a TMDB lookup so the user can find a better match than the
+// automatic one.
+func (s *Server) search(c echo.Context) error {
+	query := strings.TrimSpace(c.QueryParam("query"))
+	if query == "" {
+		return fail(c, http.StatusBadRequest, "query is required")
+	}
+	if !s.meta.Enabled() {
+		return fail(c, http.StatusServiceUnavailable, "TMDB is not configured")
+	}
+	mediaType := metadata.MediaType(c.QueryParam("type"))
+	if mediaType != metadata.TV {
+		mediaType = metadata.Movie
+	}
+	results, err := s.meta.Search(c.Request().Context(), mediaType, query)
+	if err != nil {
+		return fail(c, http.StatusBadGateway, err.Error())
+	}
+	return c.JSON(http.StatusOK, results)
+}
+
+// status tells the web interface which optional integrations are active.
+func (s *Server) status(c echo.Context) error {
+	return c.JSON(http.StatusOK, map[string]bool{"metadataEnabled": s.meta.Enabled()})
+}
+
+// streamEvents pushes the full download list over Server-Sent Events whenever
+// it changes, giving the web interface live updates without polling. Each frame
+// is a JSON array of downloads; a periodic comment keeps idle connections from
+// being reaped by proxies.
+func (s *Server) streamEvents(c echo.Context) error {
+	res := c.Response()
+	res.Header().Set(echo.HeaderContentType, "text/event-stream")
+	res.Header().Set(echo.HeaderCacheControl, "no-cache")
+	res.Header().Set("Connection", "keep-alive")
+	// Disable response buffering in nginx and similar reverse proxies.
+	res.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := res.Writer.(http.Flusher)
+	if !ok {
+		return fail(c, http.StatusInternalServerError, "streaming is not supported")
+	}
+	res.WriteHeader(http.StatusOK)
+	flusher.Flush()
+
+	updates, unsubscribe := s.q.Subscribe()
+	defer unsubscribe()
+
+	heartbeat := time.NewTicker(20 * time.Second)
+	defer heartbeat.Stop()
+
+	for {
+		select {
+		case <-c.Request().Context().Done():
+			return nil
+		case <-heartbeat.C:
+			if _, err := io.WriteString(res, ": keep-alive\n\n"); err != nil {
+				return nil
+			}
+			flusher.Flush()
+		case list, ok := <-updates:
+			if !ok {
+				return nil
+			}
+			if err := writeEvent(res, list); err != nil {
+				return nil
+			}
+			flusher.Flush()
+		}
+	}
+}
+
+// writeEvent writes one SSE frame. The payload is JSON, which marshals without
+// newlines, so a single data line is enough.
+func writeEvent(w io.Writer, v any) error {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(w, "data: %s\n\n", data)
+	return err
+}
+
+// spaHandler serves webFS and falls back to index.html for unknown paths, so a
+// single-page app with client-side routes still loads on a deep link.
+func spaHandler(webFS fs.FS) echo.HandlerFunc {
+	fileServer := http.FileServer(http.FS(webFS))
+	return func(c echo.Context) error {
+		p := strings.TrimPrefix(c.Request().URL.Path, "/")
+		if p == "" {
+			p = "index.html"
+		}
+		if _, err := fs.Stat(webFS, p); err != nil {
+			// Unknown path: serve the SPA entry point, keeping the browser URL
+			// (and thus any client-side route) intact.
+			c.Request().URL.Path = "/"
+		}
+		fileServer.ServeHTTP(c.Response(), c.Request())
+		return nil
+	}
+}
+
+func fail(c echo.Context, code int, msg string) error {
+	return c.JSON(code, map[string]string{"message": msg})
+}

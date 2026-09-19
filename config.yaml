@@ -1,0 +1,29 @@
+general:
+  listen_addr: ":8080"
+
+downloader:
+  # "qbittorrent" talks to a real client; "fake" simulates one for local demos.
+  type: fake
+  url: "http://localhost:8080"
+  username: admin
+  password: adminadmin
+  category: downloadarr-lite
+  poll_interval: 2s
+
+metadata:
+  tmdb:
+    # Optional. Without a key the app skips metadata lookup and moves content
+    # using the release name alone. Accepts a v3 API key or a v4 bearer token.
+    api_key: ""
+
+media_paths:
+  movies:
+    path: /tmp/media/movies
+    # {{.MovieName}} and {{.Year}} are available; {{if .Year}} keeps the year
+    # out of the path when the release name carried none.
+    template: '{{.MovieName}}{{if .Year}} ({{.Year}}){{end}}/{{.MovieName}}{{if .Year}} ({{.Year}}){{end}}'
+  tv:
+    path: /tmp/media/tv
+    # {{.ShowName}}, {{.SeasonNumber}}, {{.EpisodeNumber}} and {{.EpisodeTitle}}
+    # are available; the padZeros helper renders 1 as "01".
+    template: '{{.ShowName}}/Season {{.SeasonNumber | padZeros}}/{{.ShowName}} - S{{.SeasonNumber | padZeros}}E{{.EpisodeNumber | padZeros}}{{if .EpisodeTitle}} - {{.EpisodeTitle}}{{end}}'
