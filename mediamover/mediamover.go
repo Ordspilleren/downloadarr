@@ -6,7 +6,6 @@ package mediamover
 import (
 	"errors"
 	"fmt"
-	"html/template"
 	"io"
 	"io/fs"
 	"log"
@@ -16,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"text/template"
 )
 
 // Paths carries the library locations and path templates the mover renders
