@@ -241,8 +241,12 @@ func ParseInfoHash(magnet string) (string, error) {
 		}
 		value := strings.TrimPrefix(xt, prefix)
 		switch {
-		case len(value) == 40 && isHex(value):
-			return strings.ToLower(value), nil
+		case len(value) == 40:
+			raw, err := hex.DecodeString(value)
+			if err != nil {
+				continue
+			}
+			return hex.EncodeToString(raw), nil
 		case len(value) == 32:
 			raw, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(value))
 			if err != nil {
@@ -252,13 +256,4 @@ func ParseInfoHash(magnet string) (string, error) {
 		}
 	}
 	return "", errors.New("no btih info hash found in magnet link")
-}
-
-func isHex(s string) bool {
-	for _, r := range s {
-		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f' || r >= 'A' && r <= 'F') {
-			return false
-		}
-	}
-	return true
 }

@@ -149,8 +149,7 @@ func (q *Queue) Add(magnet string) (*Download, error) {
 	}
 	d := &Download{Hash: hash, Status: StatusDownloading, AddedAt: time.Now(), Match: match}
 	if q.metadata.Enabled() && displayName != "" {
-		d.matchStarted = true
-		d.matchDone = make(chan struct{})
+		beginMatchLocked(d)
 	}
 	q.downloads[hash] = d
 	q.order = append(q.order, hash)

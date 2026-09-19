@@ -45,25 +45,22 @@ keeps downloading; re-add its magnet to import it).
 | `release` | parses a release name into movie/episode/season metadata |
 | `queue` | tracks downloads, polls the client, triggers imports |
 | `server` | JSON API + serves the embedded Svelte SPA |
-| `internal/webui` | `go:embed` of the built frontend |
+| `internal/webui` | `go:embed` of the frontend build (generated, not committed) |
 | `web` | Svelte 5 (no SvelteKit) frontend, built by Vite |
 
 ## Build & run
 
-The frontend is committed as built assets, so a plain Go build works:
-
-```sh
-go build -o bin/downloadarr-lite ./cmd/downloadarr-lite
-./bin/downloadarr-lite -config config.yaml
-```
-
-After changing the frontend, rebuild it (requires Bun) and rebuild Go:
+The frontend build output (`internal/webui/dist`) is generated, not committed.
+Build it first (requires Bun), then build the Go binary:
 
 ```sh
 make build          # cd web && bun install && bun run build, then go build
+./bin/downloadarr-lite -config config.yaml
 ```
 
-Or use the Makefile targets `make web` / `make run`.
+`make web` builds just the frontend. It must be built before the Go build:
+`go build` fails with `pattern all:dist: no matching files found` until
+`internal/webui/dist` exists.
 
 Open http://localhost:8080 and paste a magnet link.
 

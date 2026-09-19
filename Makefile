@@ -14,4 +14,4 @@ tidy:
 	go mod tidy
 
 clean:
-	rm -rf bin internal/webui/dist/assets
+	rm -rf bin internal/webui/dist

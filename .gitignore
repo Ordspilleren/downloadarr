@@ -32,4 +32,7 @@ go.work.sum
 # .vscode/
 
 bin/
+
+# Generated frontend build (run `make web`).
+internal/webui/dist/
 *.db*

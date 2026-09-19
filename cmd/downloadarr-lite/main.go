@@ -33,7 +33,8 @@ func main() {
 	}
 
 	paths := cfg.MediaPaths.ToMoverPaths()
-	if err := mediamover.ValidateTemplates(paths); err != nil {
+	mover, err := mediamover.New(paths)
+	if err != nil {
 		log.Fatalf("Invalid path template: %v", err)
 	}
 	for _, dir := range []string{paths.MoviesDir, paths.TVDir} {
@@ -53,7 +54,7 @@ func main() {
 	}
 
 	tmdb := metadata.New(cfg.Metadata.TMDB.APIKey)
-	q := queue.New(client, mediamover.New(paths), tmdb, cfg.Downloader.PollInterval.Std())
+	q := queue.New(client, mover, tmdb, cfg.Downloader.PollInterval.Std())
 	srv := server.New(q, tmdb, webui.FS())
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

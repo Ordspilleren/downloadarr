@@ -71,7 +71,6 @@ var releaseTags = map[string]bool{
 func Parse(name string) Info {
 	name = strings.TrimSuffix(name, filepath.Ext(name))
 	tokens := strings.Fields(separatorRE.ReplaceAllString(strings.TrimSpace(name), " "))
-	tokens = trimEmpty(tokens)
 	if len(tokens) == 0 {
 		return Info{Kind: KindMovie, Title: name}
 	}
@@ -101,7 +100,7 @@ func Parse(name string) Info {
 	// tokens that precede the first release tag. The last such year is the
 	// release year ("Blade Runner 2049 2017 1080p" → 2017).
 	cut := firstTag(tokens)
-	year, yearIdx := -1, -1
+	year, yearIdx := 0, -1
 	for i := 0; i < cut; i++ {
 		if yearRE.MatchString(tokens[i]) {
 			year, yearIdx = atoi(tokens[i]), i
@@ -110,7 +109,7 @@ func Parse(name string) Info {
 	if yearIdx > 0 {
 		return Info{Kind: KindMovie, Title: strings.Join(tokens[:yearIdx], " "), Year: year}
 	}
-	return Info{Kind: KindMovie, Title: cleanTitle(tokens), Year: max(year, 0)}
+	return Info{Kind: KindMovie, Title: cleanTitle(tokens), Year: year}
 }
 
 // parseEpisode recognises the SxxExx and NxNN episode forms.
@@ -138,16 +137,6 @@ func firstTag(tokens []string) int {
 		}
 	}
 	return len(tokens)
-}
-
-func trimEmpty(tokens []string) []string {
-	out := tokens[:0]
-	for _, t := range tokens {
-		if t != "" {
-			out = append(out, t)
-		}
-	}
-	return out
 }
 
 func atoi(s string) int {

@@ -24,6 +24,12 @@ type Server struct {
 	echo *echo.Echo
 	q    *queue.Queue
 	meta *metadata.Client
+
+	// ctx is cancelled by Stop. Long-lived handlers (the SSE stream) select on
+	// it so they return promptly instead of making Shutdown wait out its
+	// timeout on connections that only end when the client disconnects.
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // New builds the server: /api/downloads backs the web interface, and every
@@ -34,7 +40,8 @@ func New(q *queue.Queue, meta *metadata.Client, webFS fs.FS) *Server {
 	e.HidePort = true
 	e.Use(middleware.RequestLogger())
 
-	s := &Server{echo: e, q: q, meta: meta}
+	ctx, cancel := context.WithCancel(context.Background())
+	s := &Server{echo: e, q: q, meta: meta, ctx: ctx, cancel: cancel}
 	api := e.Group("/api")
 	api.GET("/downloads", s.listDownloads)
 	api.POST("/downloads", s.addDownload)
@@ -53,8 +60,10 @@ func (s *Server) Open(addr string) error {
 	return s.echo.Start(addr)
 }
 
-// Stop shuts the server down gracefully.
+// Stop shuts the server down gracefully. It first signals long-lived handlers
+// to return, then waits for the remaining connections to drain.
 func (s *Server) Stop(ctx context.Context) error {
+	s.cancel()
 	return s.echo.Shutdown(ctx)
 }
 
@@ -162,6 +171,8 @@ func (s *Server) streamEvents(c echo.Context) error {
 
 	for {
 		select {
+		case <-s.ctx.Done():
+			return nil
 		case <-c.Request().Context().Done():
 			return nil
 		case <-heartbeat.C:

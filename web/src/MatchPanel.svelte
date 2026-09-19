@@ -1,14 +1,9 @@
 <script>
-  import { untrack } from 'svelte'
-
   let { download, metadataEnabled = false } = $props()
 
-  // These are initial values only; the effect below re-seeds them whenever the
-  // match identity changes, so untrack keeps the compiler quiet about the
-  // one-off prop read.
-  let type = $state(untrack(() => download.match?.mediaType ?? 'movie'))
-  let season = $state(untrack(() => download.match?.season ?? 0))
-  let episode = $state(untrack(() => download.match?.episode ?? 0))
+  let type = $state('movie')
+  let season = $state(0)
+  let episode = $state(0)
   let query = $state('')
   let results = $state(null)
   let searching = $state(false)

@@ -8,7 +8,8 @@ import (
 	"io/fs"
 )
 
-// dist is written by `bun run build` in the web/ directory.
+// dist is written by `bun run build` in the web/ directory. It is not
+// committed, so the Go build fails until the frontend has been built.
 //
 //go:embed all:dist
 var dist embed.FS

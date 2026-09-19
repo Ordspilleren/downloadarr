@@ -47,10 +47,7 @@ func (q *Queue) importContent(d *Download, contentPath string) (string, error) {
 // titles from TMDB when the pack is matched to a known show.
 func (q *Queue) seasonPackInfo(d *Download) mediamover.SeasonPackInfo {
 	info := mediamover.SeasonPackInfo{ShowName: d.Match.Title, SeasonNumber: d.Match.Season}
-	if d.Match.TMDBID <= 0 || d.Match.Season <= 0 || !q.metadata.Enabled() {
-		return info
-	}
-	episodes, err := q.metadata.TVSeason(q.ctx, d.Match.TMDBID, d.Match.Season)
+	episodes, err := q.seasonEpisodes(d)
 	if err != nil {
 		log.Printf("Metadata: season %d of %q: %v", d.Match.Season, d.Match.Title, err)
 		return info
@@ -63,10 +60,7 @@ func (q *Queue) seasonPackInfo(d *Download) mediamover.SeasonPackInfo {
 
 // lookupEpisodeTitle returns the matched episode's title from TMDB, or "".
 func (q *Queue) lookupEpisodeTitle(d *Download) string {
-	if d.Match.TMDBID <= 0 || d.Match.Season <= 0 || !q.metadata.Enabled() {
-		return ""
-	}
-	episodes, err := q.metadata.TVSeason(q.ctx, d.Match.TMDBID, d.Match.Season)
+	episodes, err := q.seasonEpisodes(d)
 	if err != nil {
 		return ""
 	}
@@ -76,4 +70,13 @@ func (q *Queue) lookupEpisodeTitle(d *Download) string {
 		}
 	}
 	return ""
+}
+
+// seasonEpisodes fetches the episodes of the matched season, or nil when no
+// lookup is possible (no TMDB id, no season, or TMDB disabled).
+func (q *Queue) seasonEpisodes(d *Download) ([]metadata.Episode, error) {
+	if d.Match.TMDBID <= 0 || d.Match.Season <= 0 || !q.metadata.Enabled() {
+		return nil, nil
+	}
+	return q.metadata.TVSeason(q.ctx, d.Match.TMDBID, d.Match.Season)
 }

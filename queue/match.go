@@ -37,14 +37,20 @@ func (q *Queue) startMatchIfNeeded(hash string) {
 		q.mu.Unlock()
 		return
 	}
-	d.matchStarted = true
-	d.matchDone = make(chan struct{})
 	d.Match = seedMatch(release.Parse(d.Name))
 	d.Match.Status = MatchPending
+	beginMatchLocked(d)
 	q.notifyLocked()
 	q.mu.Unlock()
 
 	go q.matchDownload(hash)
+}
+
+// beginMatchLocked arms the match-done handshake for a download so an import
+// can wait for the lookup. Callers must hold q.mu.
+func beginMatchLocked(d *Download) {
+	d.matchStarted = true
+	d.matchDone = make(chan struct{})
 }
 
 // matchDownload searches TMDB for the release and records the best hit. It
@@ -157,45 +163,41 @@ func (q *Queue) SetMatch(hash string, in MatchInput) (*Download, error) {
 		in.MediaType = metadata.Movie
 	}
 
+	var next Match
 	if in.TMDBID > 0 && q.metadata.Enabled() {
 		c, err := q.metadata.Get(q.ctx, in.MediaType, in.TMDBID)
 		if err != nil {
 			return nil, err
 		}
-		if !q.update(hash, func(d *Download) bool {
-			d.Match = Match{
-				MediaType:    c.MediaType,
-				Status:       MatchManual,
-				TMDBID:       c.TMDBID,
-				Title:        c.Title,
-				Year:         c.Year,
-				Overview:     c.Overview,
-				PosterURL:    c.PosterURL,
-				Season:       in.Season,
-				Episode:      in.Episode,
-				EpisodeTitle: d.Match.EpisodeTitle,
-			}
-			return true
-		}) {
-			return nil, ErrNotFound
+		next = Match{
+			MediaType: c.MediaType,
+			Status:    MatchManual,
+			TMDBID:    c.TMDBID,
+			Title:     c.Title,
+			Year:      c.Year,
+			Overview:  c.Overview,
+			PosterURL: c.PosterURL,
+			Season:    in.Season,
+			Episode:   in.Episode,
 		}
-		return q.get(hash), nil
+	} else {
+		in.Title = strings.TrimSpace(in.Title)
+		if in.Title == "" {
+			return nil, errors.New("a TMDB id or a title is required")
+		}
+		next = Match{
+			MediaType: in.MediaType,
+			Status:    MatchManual,
+			Title:     in.Title,
+			Year:      in.Year,
+			Season:    in.Season,
+			Episode:   in.Episode,
+		}
 	}
 
-	in.Title = strings.TrimSpace(in.Title)
-	if in.Title == "" {
-		return nil, errors.New("a TMDB id or a title is required")
-	}
 	if !q.update(hash, func(d *Download) bool {
-		d.Match = Match{
-			MediaType:    in.MediaType,
-			Status:       MatchManual,
-			Title:        in.Title,
-			Year:         in.Year,
-			Season:       in.Season,
-			Episode:      in.Episode,
-			EpisodeTitle: d.Match.EpisodeTitle,
-		}
+		next.EpisodeTitle = d.Match.EpisodeTitle
+		d.Match = next
 		return true
 	}) {
 		return nil, ErrNotFound

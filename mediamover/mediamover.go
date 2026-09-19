@@ -29,7 +29,9 @@ type Paths struct {
 
 // MediaMover moves downloaded files into their media locations.
 type MediaMover struct {
-	paths Paths
+	paths      Paths
+	tvTmpl     *template.Template
+	moviesTmpl *template.Template
 }
 
 // MovieInfo describes a movie. Field names match the movie path template
@@ -65,43 +67,35 @@ type SeasonPackEpisode struct {
 	Title         string
 }
 
-// New creates a MediaMover.
-func New(paths Paths) *MediaMover {
-	return &MediaMover{paths: paths}
-}
-
-// ValidateTemplates parses both path templates so syntax errors surface at
-// startup instead of at the first move.
-func ValidateTemplates(paths Paths) error {
-	if _, err := parsePathTemplate(paths.TVTemplate); err != nil {
-		return fmt.Errorf("invalid TV template: %w", err)
+// New creates a MediaMover, parsing both path templates so syntax errors
+// surface at startup instead of at the first move.
+func New(paths Paths) (*MediaMover, error) {
+	tvTmpl, err := parsePathTemplate(paths.TVTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid TV template: %w", err)
 	}
-	if _, err := parsePathTemplate(paths.MoviesTemplate); err != nil {
-		return fmt.Errorf("invalid movie template: %w", err)
+	moviesTmpl, err := parsePathTemplate(paths.MoviesTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid movie template: %w", err)
 	}
-	return nil
+	return &MediaMover{paths: paths, tvTmpl: tvTmpl, moviesTmpl: moviesTmpl}, nil
 }
 
 // MoveMovie hard-links the largest video file of the download into the movie
 // library (samples and extras are skipped) and returns the destination path.
 func (m *MediaMover) MoveMovie(sourcePath string, info MovieInfo) (string, error) {
-	if err := checkSource(sourcePath); err != nil {
-		return "", err
-	}
-	src, err := largestVideoFile(sourcePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to locate video file: %w", err)
-	}
-	dest, err := m.destination(m.paths.MoviesTemplate, m.paths.MoviesDir, info)
-	if err != nil {
-		return "", err
-	}
-	return dest, m.linkWithExtension(src, dest)
+	return m.moveLargestVideo(sourcePath, m.moviesTmpl, m.paths.MoviesDir, info)
 }
 
 // MoveEpisode hard-links the largest video file of a single-episode download
 // into the TV library and returns the destination path.
 func (m *MediaMover) MoveEpisode(sourcePath string, info TVEpisodeInfo) (string, error) {
+	return m.moveLargestVideo(sourcePath, m.tvTmpl, m.paths.TVDir, info)
+}
+
+// moveLargestVideo hard-links the largest video file under sourcePath to the
+// destination rendered from tmpl under basePath.
+func (m *MediaMover) moveLargestVideo(sourcePath string, tmpl *template.Template, basePath string, info any) (string, error) {
 	if err := checkSource(sourcePath); err != nil {
 		return "", err
 	}
@@ -109,11 +103,11 @@ func (m *MediaMover) MoveEpisode(sourcePath string, info TVEpisodeInfo) (string,
 	if err != nil {
 		return "", fmt.Errorf("failed to locate video file: %w", err)
 	}
-	dest, err := m.destination(m.paths.TVTemplate, m.paths.TVDir, info)
+	dest, err := m.destination(tmpl, basePath, info)
 	if err != nil {
 		return "", err
 	}
-	return dest, m.linkWithExtension(src, dest)
+	return m.linkWithExtension(src, dest)
 }
 
 // MoveSeasonPack hard-links every video file of a season pack into the TV
@@ -135,14 +129,14 @@ func (m *MediaMover) MoveSeasonPack(sourcePath string, info SeasonPackInfo) (str
 		return "", err
 	}
 
-	destDir := filepath.Join(m.paths.TVDir, sanitize(info.ShowName), fmt.Sprintf("Season %02d", info.SeasonNumber))
+	destDir := ""
 	moved := 0
 	for _, src := range files {
 		season, episode, ok := parseEpisodeNumber(src)
 		if !ok || season != info.SeasonNumber {
 			continue
 		}
-		dest, err := m.destination(m.paths.TVTemplate, m.paths.TVDir, TVEpisodeInfo{
+		dest, err := m.destination(m.tvTmpl, m.paths.TVDir, TVEpisodeInfo{
 			ShowName:      info.ShowName,
 			SeasonNumber:  info.SeasonNumber,
 			EpisodeNumber: episode,
@@ -151,8 +145,12 @@ func (m *MediaMover) MoveSeasonPack(sourcePath string, info SeasonPackInfo) (str
 		if err != nil {
 			return "", err
 		}
-		if err := m.linkWithExtension(src, dest); err != nil {
+		finalDest, err := m.linkWithExtension(src, dest)
+		if err != nil {
 			return "", fmt.Errorf("failed to link %s: %w", src, err)
+		}
+		if moved == 0 {
+			destDir = filepath.Dir(finalDest)
 		}
 		moved++
 	}
@@ -173,12 +171,8 @@ func HasMultipleVideoFiles(path string) (bool, error) {
 	return len(files) > 1, nil
 }
 
-// destination renders the path template for info under basePath.
-func (m *MediaMover) destination(templateStr, basePath string, info any) (string, error) {
-	tmpl, err := parsePathTemplate(templateStr)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse template: %w", err)
-	}
+// destination renders tmpl for info under basePath.
+func (m *MediaMover) destination(tmpl *template.Template, basePath string, info any) (string, error) {
 	var result strings.Builder
 	if err := tmpl.Execute(&result, info); err != nil {
 		return "", fmt.Errorf("failed to execute template: %w", err)
@@ -187,12 +181,18 @@ func (m *MediaMover) destination(templateStr, basePath string, info any) (string
 }
 
 // linkWithExtension hard-links src to dest, appending src's extension when the
-// rendered template did not already include one.
-func (m *MediaMover) linkWithExtension(src, dest string) error {
-	if filepath.Ext(dest) == "" {
+// rendered template did not already include one. It returns the destination the
+// file was actually linked to.
+//
+// Whether the template included an extension is judged against the known video
+// extensions rather than against the mere presence of a dot: a movie title such
+// as "Coyote vs. Acme" ends in a dot-separated word, and treating that as an
+// extension would leave the file without its .mkv suffix.
+func (m *MediaMover) linkWithExtension(src, dest string) (string, error) {
+	if !videoExtensions[strings.ToLower(filepath.Ext(dest))] {
 		dest += filepath.Ext(src)
 	}
-	return linkFile(src, dest)
+	return dest, linkFile(src, dest)
 }
 
 // parsePathTemplate builds the template with the functions path templates may

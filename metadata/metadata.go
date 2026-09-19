@@ -80,41 +80,24 @@ func (c *Client) Search(ctx context.Context, mediaType MediaType, query string) 
 	if query == "" {
 		return nil, nil
 	}
+	path := "/search/movie"
 	if mediaType == TV {
-		return c.searchTV(ctx, query)
+		path = "/search/tv"
 	}
-	return c.searchMovie(ctx, query)
+	return c.search(ctx, path, mediaType, query)
 }
 
 // Get resolves a single TMDB id to its canonical metadata.
 func (c *Client) Get(ctx context.Context, mediaType MediaType, id int) (Candidate, error) {
+	path := "/movie/%d"
 	if mediaType == TV {
-		var raw struct {
-			ID           int    `json:"id"`
-			Name         string `json:"name"`
-			FirstAirDate string `json:"first_air_date"`
-			Overview     string `json:"overview"`
-			PosterPath   string `json:"poster_path"`
-		}
-		if err := c.get(ctx, fmt.Sprintf("/tv/%d", id), nil, &raw); err != nil {
-			return Candidate{}, err
-		}
-		return Candidate{TMDBID: raw.ID, MediaType: TV, Title: raw.Name,
-			Year: yearOf(raw.FirstAirDate), Overview: raw.Overview, PosterURL: posterURL(raw.PosterPath)}, nil
+		path = "/tv/%d"
 	}
-
-	var raw struct {
-		ID          int    `json:"id"`
-		Title       string `json:"title"`
-		ReleaseDate string `json:"release_date"`
-		Overview    string `json:"overview"`
-		PosterPath  string `json:"poster_path"`
-	}
-	if err := c.get(ctx, fmt.Sprintf("/movie/%d", id), nil, &raw); err != nil {
+	var raw tmdbItem
+	if err := c.get(ctx, fmt.Sprintf(path, id), nil, &raw); err != nil {
 		return Candidate{}, err
 	}
-	return Candidate{TMDBID: raw.ID, MediaType: Movie, Title: raw.Title,
-		Year: yearOf(raw.ReleaseDate), Overview: raw.Overview, PosterURL: posterURL(raw.PosterPath)}, nil
+	return raw.candidate(mediaType), nil
 }
 
 // TVSeason returns the episodes of one season, used to fill in episode titles
@@ -136,44 +119,45 @@ func (c *Client) TVSeason(ctx context.Context, tvID, season int) ([]Episode, err
 	return episodes, nil
 }
 
-func (c *Client) searchMovie(ctx context.Context, query string) ([]Candidate, error) {
-	var raw struct {
-		Results []struct {
-			ID          int    `json:"id"`
-			Title       string `json:"title"`
-			ReleaseDate string `json:"release_date"`
-			Overview    string `json:"overview"`
-			PosterPath  string `json:"poster_path"`
-		} `json:"results"`
-	}
-	if err := c.get(ctx, "/search/movie", url.Values{"query": {query}}, &raw); err != nil {
-		return nil, err
-	}
-	out := make([]Candidate, 0, len(raw.Results))
-	for _, r := range raw.Results {
-		out = append(out, Candidate{TMDBID: r.ID, MediaType: Movie, Title: r.Title,
-			Year: yearOf(r.ReleaseDate), Overview: r.Overview, PosterURL: posterURL(r.PosterPath)})
-	}
-	return out, nil
+// tmdbItem is the shared shape of a TMDB movie or TV record. Movie records use
+// Title/ReleaseDate, TV records use Name/FirstAirDate.
+type tmdbItem struct {
+	ID           int    `json:"id"`
+	Title        string `json:"title"`
+	Name         string `json:"name"`
+	ReleaseDate  string `json:"release_date"`
+	FirstAirDate string `json:"first_air_date"`
+	Overview     string `json:"overview"`
+	PosterPath   string `json:"poster_path"`
 }
 
-func (c *Client) searchTV(ctx context.Context, query string) ([]Candidate, error) {
-	var raw struct {
-		Results []struct {
-			ID           int    `json:"id"`
-			Name         string `json:"name"`
-			FirstAirDate string `json:"first_air_date"`
-			Overview     string `json:"overview"`
-			PosterPath   string `json:"poster_path"`
-		} `json:"results"`
+// candidate converts a TMDB record into a Candidate of the given media type.
+func (t tmdbItem) candidate(mediaType MediaType) Candidate {
+	title, date := t.Title, t.ReleaseDate
+	if mediaType == TV {
+		title, date = t.Name, t.FirstAirDate
 	}
-	if err := c.get(ctx, "/search/tv", url.Values{"query": {query}}, &raw); err != nil {
+	return Candidate{
+		TMDBID:    t.ID,
+		MediaType: mediaType,
+		Title:     title,
+		Year:      yearOf(date),
+		Overview:  t.Overview,
+		PosterURL: posterURL(t.PosterPath),
+	}
+}
+
+// search runs a TMDB search endpoint and converts its results.
+func (c *Client) search(ctx context.Context, path string, mediaType MediaType, query string) ([]Candidate, error) {
+	var raw struct {
+		Results []tmdbItem `json:"results"`
+	}
+	if err := c.get(ctx, path, url.Values{"query": {query}}, &raw); err != nil {
 		return nil, err
 	}
 	out := make([]Candidate, 0, len(raw.Results))
 	for _, r := range raw.Results {
-		out = append(out, Candidate{TMDBID: r.ID, MediaType: TV, Title: r.Name,
-			Year: yearOf(r.FirstAirDate), Overview: r.Overview, PosterURL: posterURL(r.PosterPath)})
+		out = append(out, r.candidate(mediaType))
 	}
 	return out, nil
 }
