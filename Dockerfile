@@ -21,8 +21,8 @@ RUN CGO_ENABLED=0 go build -o bin/downloadarr-lite ./cmd/downloadarr-lite
 # --- Runtime ----------------------------------------------------------------
 FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata \
-    && addgroup -S downloadarr \
-    && adduser -S -G downloadarr downloadarr \
+    && addgroup -S -g 1000 downloadarr \
+    && adduser -S -D -u 1000 -G downloadarr downloadarr \
     && mkdir -p /app \
     && chown -R downloadarr:downloadarr /app
 COPY --from=backend /app/bin/downloadarr-lite /usr/local/bin/downloadarr-lite
