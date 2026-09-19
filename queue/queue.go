@@ -1,8 +1,9 @@
-// Package queue tracks magnet downloads from add to import. It polls the
+// Package queue tracks torrent downloads from add to import. It polls the
 // download client for progress, looks up metadata for each release, and once a
-// torrent completes hands the content to the mover. State is kept in memory:
-// this is a deliberately small tool, not a durable job system, so the list is
-// empty again after a restart.
+// torrent completes hands the content to the mover. Torrents can be added as a
+// magnet link or an uploaded .torrent file. State is kept in memory: this is a
+// deliberately small tool, not a durable job system, so the list is empty
+// again after a restart.
 package queue
 
 import (
@@ -67,7 +68,7 @@ type Match struct {
 	Candidates   []metadata.Candidate `json:"candidates,omitempty"`
 }
 
-// Download is one tracked magnet.
+// Download is one tracked torrent.
 type Download struct {
 	Hash        string    `json:"hash"`
 	Name        string    `json:"name"`
@@ -133,8 +134,31 @@ func (q *Queue) Add(magnet string) (*Download, error) {
 	if err != nil {
 		return nil, err
 	}
+	return q.add(hash, downloader.MagnetDisplayName(magnet), func(ctx context.Context) error {
+		return q.client.AddTorrent(ctx, magnet)
+	})
+}
 
-	displayName := downloader.MagnetDisplayName(magnet)
+// AddFile validates an uploaded .torrent file, registers it, and starts
+// watching it. fallbackName is used as the display name when the file carries
+// none. It returns ErrDuplicate when the hash is already tracked.
+func (q *Queue) AddFile(data []byte, fallbackName string) (*Download, error) {
+	info, err := downloader.ParseTorrentFile(data)
+	if err != nil {
+		return nil, err
+	}
+	name := info.Name
+	if name == "" {
+		name = fallbackName
+	}
+	return q.add(info.Hash, name, func(ctx context.Context) error {
+		return q.client.AddTorrentFile(ctx, data)
+	})
+}
+
+// add registers a download under hash and asks the client to fetch it. Magnet
+// links and .torrent files share the rest of the lifecycle from here on.
+func (q *Queue) add(hash, displayName string, fetch func(context.Context) error) (*Download, error) {
 	match := seedMatch(release.Parse(displayName))
 	if q.metadata.Enabled() {
 		match.Status = MatchPending
@@ -156,7 +180,7 @@ func (q *Queue) Add(magnet string) (*Download, error) {
 	q.notifyLocked()
 	q.mu.Unlock()
 
-	if err := q.client.AddTorrent(q.ctx, magnet); err != nil {
+	if err := fetch(q.ctx); err != nil {
 		q.fail(hash, err.Error())
 		return q.get(hash), err
 	}

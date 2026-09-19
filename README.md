@@ -1,10 +1,11 @@
 # downloadarr-lite
 
-A deliberately small version of `downloadarr`: paste a magnet link in the web
-UI, a torrent client downloads it, and the mover hard-links the finished files
-into your movie or TV library. There is no indexer, no database and no ranking.
-TMDB integration is optional: it turns the release name into canonical
-metadata that the user can correct before the import.
+A deliberately small version of `downloadarr`: paste a magnet link or upload
+a `.torrent` file (or drag one onto the page) in the web UI, a torrent client
+downloads it, and the mover hard-links the finished files into your movie or TV
+library. There is no indexer, no database and no ranking. TMDB integration is
+optional: it turns the release name into canonical metadata that the user can
+correct before the import.
 
 ## How it works
 
@@ -39,7 +40,7 @@ keeps downloading; re-add its magnet to import it).
 |---|---|
 | `cmd/downloadarr-lite` | composition root: config → wiring → start/stop |
 | `config` | YAML loading, defaults and validation |
-| `downloader` | qBittorrent client, a dev `fake` client, magnet info-hash parsing |
+| `downloader` | qBittorrent client, a dev `fake` client, magnet/torrent info-hash parsing |
 | `mediamover` | hard-links (or copies) finished content; template paths |
 | `metadata` | minimal TMDB client: search, lookup, season episodes |
 | `release` | parses a release name into movie/episode/season metadata |
@@ -62,7 +63,8 @@ make build          # cd web && bun install && bun run check && bun run build, t
 `go build` fails with `pattern all:dist: no matching files found` until
 `internal/webui/dist` exists.
 
-Open http://localhost:8080 and paste a magnet link.
+Open http://localhost:8080 and paste a magnet link, pick a `.torrent` file, or
+drag one onto the page.
 
 ### Trying it without qBittorrent
 
@@ -88,7 +90,7 @@ changes during development.
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/downloads` | current list, newest first |
-| `POST` | `/api/downloads` | add `{"magnet": "magnet:?xt=…"}` |
+| `POST` | `/api/downloads` | add a magnet (`{"magnet": "magnet:?xt=…"}`) or a `.torrent` file (`multipart/form-data` with a `file` field) |
 | `DELETE` | `/api/downloads/:hash` | forget a completed/failed entry |
 | `PATCH` | `/api/downloads/:hash/match` | correct the metadata: `{"mediaType":"movie","tmdbId":603,"season":0,"episode":0}` (or `title`/`year` for a manual override) |
 | `GET` | `/api/search?type=movie&query=…` | TMDB search for the match editor |

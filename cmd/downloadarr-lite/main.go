@@ -1,6 +1,6 @@
 // Command downloadarr-lite is a tiny web app for importing torrents: paste a
-// magnet link, the torrent client downloads it, and the mover hard-links the
-// finished content into the movie or TV library.
+// magnet link or upload a .torrent file, the torrent client downloads it, and
+// the mover hard-links the finished content into the movie or TV library.
 package main
 
 import (

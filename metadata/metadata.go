@@ -1,7 +1,8 @@
-// Package metadata looks up movie and TV metadata on TMDB. The magnet flow only
-// yields a release name, so the queue uses this client to turn that name into a
-// canonical title, year, and (for TV) episode titles. A client with no API key
-// is disabled: the rest of the app then falls back to release-name parsing.
+// Package metadata looks up movie and TV metadata on TMDB. Adding a torrent
+// only yields a release name, so the queue uses this client to turn that name
+// into a canonical title, year, and (for TV) episode titles. A client with no
+// API key is disabled: the rest of the app then falls back to release-name
+// parsing.
 package metadata
 
 import (

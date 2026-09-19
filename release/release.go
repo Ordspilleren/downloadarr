@@ -1,7 +1,8 @@
 // Package release turns a torrent's display name into the little bit of media
-// metadata the mover needs. The web UI only asks for a magnet link, so there is
-// no metadata provider to consult: the title, year and episode numbers are
-// inferred from the release name ("Show.S01E03.1080p", "Movie.Title.2023.…").
+// metadata the mover needs. The web UI only supplies a magnet link or a
+// .torrent file, so there is no metadata provider to consult: the title, year
+// and episode numbers are inferred from the release name ("Show.S01E03.1080p",
+// "Movie.Title.2023.…").
 // The inference is best-effort — a name that does not look like TV is treated
 // as a movie, with whatever release tags could be stripped.
 package release

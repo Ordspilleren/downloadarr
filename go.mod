@@ -4,6 +4,7 @@ go 1.27.0
 
 require (
 	github.com/autobrr/go-qbittorrent v1.19.0
+	github.com/autobrr/go-torrent v1.1.1
 	github.com/labstack/echo/v4 v4.15.4
 	gopkg.in/yaml.v3 v3.0.1
 )

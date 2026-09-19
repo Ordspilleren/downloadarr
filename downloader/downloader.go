@@ -45,6 +45,8 @@ type Client interface {
 	// AddTorrent hands a magnet link to the client. It must be idempotent
 	// enough that a duplicate add does not fail the request.
 	AddTorrent(ctx context.Context, magnet string) error
+	// AddTorrentFile hands the raw bytes of a .torrent file to the client.
+	AddTorrentFile(ctx context.Context, data []byte) error
 	// GetTorrent reports the state of a torrent by info hash, or ErrNotFound.
 	GetTorrent(ctx context.Context, hash string) (TorrentInfo, error)
 }
@@ -86,6 +88,14 @@ func (q *qbittorrentClient) AddTorrent(ctx context.Context, magnet string) error
 	options := &qbittorrent.TorrentAddOptions{Paused: false, Category: q.config.Category}
 	if _, err := q.client.AddTorrentFromUrlCtx(ctx, magnet, options.Prepare()); err != nil {
 		return fmt.Errorf("failed to add magnet link: %w", err)
+	}
+	return nil
+}
+
+func (q *qbittorrentClient) AddTorrentFile(ctx context.Context, data []byte) error {
+	options := &qbittorrent.TorrentAddOptions{Paused: false, Category: q.config.Category}
+	if _, err := q.client.AddTorrentFromMemoryCtx(ctx, data, options.Prepare()); err != nil {
+		return fmt.Errorf("failed to add torrent file: %w", err)
 	}
 	return nil
 }
@@ -138,15 +148,29 @@ func (f *fakeClient) AddTorrent(ctx context.Context, magnet string) error {
 	if err != nil {
 		return err
 	}
+	f.register(hash, MagnetDisplayName(magnet))
+	return nil
+}
+
+func (f *fakeClient) AddTorrentFile(ctx context.Context, data []byte) error {
+	info, err := ParseTorrentFile(data)
+	if err != nil {
+		return err
+	}
+	f.register(info.Hash, info.Name)
+	return nil
+}
+
+// register records a torrent under its info hash, keeping the first name seen.
+func (f *fakeClient) register(hash, name string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if _, ok := f.added[hash]; !ok {
 		f.added[hash] = time.Now()
 	}
 	if _, ok := f.names[hash]; !ok {
-		f.names[hash] = MagnetDisplayName(magnet)
+		f.names[hash] = name
 	}
-	return nil
 }
 
 func (f *fakeClient) GetTorrent(ctx context.Context, hash string) (TorrentInfo, error) {

@@ -39,6 +39,9 @@ func New(q *queue.Queue, meta *metadata.Client, webFS fs.FS) *Server {
 	e.HideBanner = true
 	e.HidePort = true
 	e.Use(middleware.RequestLogger())
+	// Cap request bodies so a huge upload cannot exhaust memory. Torrent files
+	// are tiny; 10 MiB leaves plenty of headroom.
+	e.Use(middleware.BodyLimit("10M"))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{echo: e, q: q, meta: meta, ctx: ctx, cancel: cancel}
@@ -75,7 +78,13 @@ type addRequest struct {
 	Magnet string `json:"magnet"`
 }
 
+// addDownload accepts either a JSON body with a magnet link or a
+// multipart/form-data body with a .torrent file.
 func (s *Server) addDownload(c echo.Context) error {
+	if strings.HasPrefix(c.Request().Header.Get(echo.HeaderContentType), "multipart/form-data") {
+		return s.addTorrentFile(c)
+	}
+
 	var req addRequest
 	if err := c.Bind(&req); err != nil {
 		return fail(c, http.StatusBadRequest, "invalid request body")
@@ -89,6 +98,33 @@ func (s *Server) addDownload(c echo.Context) error {
 	switch {
 	case errors.Is(err, queue.ErrDuplicate):
 		return fail(c, http.StatusConflict, "this magnet is already being downloaded")
+	case err != nil:
+		return fail(c, http.StatusBadRequest, err.Error())
+	}
+	return c.JSON(http.StatusCreated, d)
+}
+
+// addTorrentFile handles the multipart branch of addDownload: it reads the
+// uploaded .torrent and registers it by its info hash.
+func (s *Server) addTorrentFile(c echo.Context) error {
+	header, err := c.FormFile("file")
+	if err != nil {
+		return fail(c, http.StatusBadRequest, "a .torrent file is required")
+	}
+	src, err := header.Open()
+	if err != nil {
+		return fail(c, http.StatusBadRequest, "could not read the uploaded file")
+	}
+	defer src.Close()
+	data, err := io.ReadAll(src)
+	if err != nil {
+		return fail(c, http.StatusBadRequest, "could not read the uploaded file")
+	}
+
+	d, err := s.q.AddFile(data, header.Filename)
+	switch {
+	case errors.Is(err, queue.ErrDuplicate):
+		return fail(c, http.StatusConflict, "this torrent is already being downloaded")
 	case err != nil:
 		return fail(c, http.StatusBadRequest, err.Error())
 	}
