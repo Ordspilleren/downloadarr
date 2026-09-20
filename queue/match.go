@@ -33,7 +33,7 @@ func seedMatch(info release.Info) Match {
 func (q *Queue) startMatchIfNeeded(hash string) {
 	q.mu.Lock()
 	d := q.downloads[hash]
-	if d == nil || d.matchStarted || !q.metadata.Enabled() || d.Name == "" {
+	if d == nil || d.removing || d.matchStarted || !q.metadata.Enabled() || d.Name == "" {
 		q.mu.Unlock()
 		return
 	}

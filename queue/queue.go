@@ -25,6 +25,10 @@ var ErrDuplicate = errors.New("download already exists")
 // ErrNotFound is returned when a download hash is not tracked.
 var ErrNotFound = errors.New("download not found")
 
+// ErrImporting is returned when a download cannot be removed because it is
+// already being imported into the library.
+var ErrImporting = errors.New("download is being imported")
+
 // Status is the lifecycle state of a download.
 type Status string
 
@@ -84,6 +88,11 @@ type Download struct {
 	// only the release-name guess while a lookup is still running.
 	matchStarted bool
 	matchDone    chan struct{}
+
+	// removing is set while a removal is talking to the download client, so
+	// the watch loop defers an import until the removal settles and a duplicate
+	// add is still rejected. It is in-memory only and never serialized.
+	removing bool
 }
 
 func (d *Download) clone() *Download {
@@ -254,15 +263,68 @@ func (q *Queue) notifyLocked() {
 	}
 }
 
-// Remove forgets a completed or failed download. Active downloads cannot be
-// removed; there would be nothing left to import them.
-func (q *Queue) Remove(hash string) bool {
+// Clear forgets a download without touching the download client: the torrent
+// keeps downloading or seeding, it just leaves the in-memory list. A download
+// that is being removed or imported still needs its entry, so it cannot be
+// cleared yet.
+func (q *Queue) Clear(hash string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	d, ok := q.downloads[hash]
-	if !ok || (d.Status != StatusCompleted && d.Status != StatusFailed) {
-		return false
+	if !ok {
+		return ErrNotFound
 	}
+	if d.Status == StatusMoving || d.removing {
+		return ErrImporting
+	}
+	q.removeLocked(hash)
+	q.notifyLocked()
+	return nil
+}
+
+// Delete removes a download from the download client and forgets it. A
+// download that is still fetching is cancelled; when deleteFiles is set the
+// downloaded data (for an incomplete download, the partial files) is deleted
+// too. The only state that cannot be deleted is an import already in progress,
+// which needs the entry to finish.
+func (q *Queue) Delete(hash string, deleteFiles bool) error {
+	q.mu.Lock()
+	d, ok := q.downloads[hash]
+	if !ok {
+		q.mu.Unlock()
+		return ErrNotFound
+	}
+	if d.Status == StatusMoving || d.removing {
+		q.mu.Unlock()
+		return ErrImporting
+	}
+	// Mark the download while the client call is in flight: the watch loop
+	// defers an import until the removal settles, and a duplicate add is still
+	// rejected because the entry stays registered.
+	d.removing = true
+	q.mu.Unlock()
+
+	// A hash the client already forgot is not an error: the goal is for it to
+	// be gone.
+	if err := q.client.RemoveTorrent(q.ctx, hash, deleteFiles); err != nil && !errors.Is(err, downloader.ErrNotFound) {
+		// Let the watch loop and match lookups resume; the entry stays tracked
+		// so the user can retry.
+		q.update(hash, func(d *Download) bool {
+			d.removing = false
+			return true
+		})
+		return err
+	}
+
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.removeLocked(hash)
+	q.notifyLocked()
+	return nil
+}
+
+// removeLocked deletes a download and its order entry. Callers must hold q.mu.
+func (q *Queue) removeLocked(hash string) {
 	delete(q.downloads, hash)
 	for i, h := range q.order {
 		if h == hash {
@@ -270,8 +332,6 @@ func (q *Queue) Remove(hash string) bool {
 			break
 		}
 	}
-	q.notifyLocked()
-	return true
 }
 
 // watch polls one torrent until it completes, then imports it.
@@ -289,6 +349,9 @@ func (q *Queue) watch(hash string) {
 		info, err := q.client.GetTorrent(q.ctx, hash)
 		if err != nil {
 			if errors.Is(err, downloader.ErrNotFound) {
+				if q.get(hash) == nil {
+					return // the download was removed
+				}
 				// The client may not list the torrent in the moment right after
 				// AddTorrent; give it a grace window before giving up.
 				if misses++; misses >= 30 {
@@ -317,37 +380,59 @@ func (q *Queue) watch(hash string) {
 		// client reports the torrent's name.
 		q.startMatchIfNeeded(hash)
 		if info.Complete {
-			q.importTorrent(hash, info)
-			return
+			// Keep polling when an import is deferred because a removal is in
+			// flight; the next tick either imports or finds the entry gone.
+			if q.importTorrent(hash, info) {
+				return
+			}
 		}
 	}
 }
 
-// importTorrent moves a completed torrent's content into the library.
-func (q *Queue) importTorrent(hash string, info downloader.TorrentInfo) {
+// claimImport reports whether the caller may import the torrent, and whether
+// the watch loop should keep polling. While a removal is in flight it returns
+// (false, true) so the watcher retries once the removal settles; for any other
+// non-downloading state it returns (false, false) so the watcher stops.
+func (q *Queue) claimImport(hash, name string) (claimed, retry bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	d, ok := q.downloads[hash]
+	if !ok || d.Status != StatusDownloading {
+		return false, false
+	}
+	if d.removing {
+		return false, true
+	}
+	d.Status = StatusMoving
+	d.Progress = 1
+	if d.Name == "" {
+		d.Name = name
+	}
+	q.notifyLocked()
+	return true, false
+}
+
+// importTorrent moves a completed torrent's content into the library. It
+// returns whether the watch loop should stop: false means an import is
+// deferred because a removal is in flight, so the caller should keep polling.
+func (q *Queue) importTorrent(hash string, info downloader.TorrentInfo) bool {
 	// Give an in-flight TMDB lookup a moment to finish, so the import uses the
 	// matched metadata rather than the release-name guess.
 	q.waitForMatch(hash)
 
-	if !q.update(hash, func(d *Download) bool {
-		d.Status = StatusMoving
-		d.Progress = 1
-		if d.Name == "" {
-			d.Name = info.Name
-		}
-		return true
-	}) {
-		return
+	claimed, retry := q.claimImport(hash, info.Name)
+	if !claimed {
+		return !retry
 	}
 
 	d := q.get(hash)
 	if d == nil {
-		return
+		return true
 	}
 	dest, err := q.importContent(d, info.ContentPath)
 	if err != nil {
 		q.fail(hash, err.Error())
-		return
+		return true
 	}
 	q.update(hash, func(d *Download) bool {
 		d.Status = StatusCompleted
@@ -355,6 +440,7 @@ func (q *Queue) importTorrent(hash string, info downloader.TorrentInfo) {
 		return true
 	})
 	log.Printf("Imported %q -> %s", d.Match.Title, dest)
+	return true
 }
 
 // fail records the error on a tracked download.

@@ -49,6 +49,11 @@ type Client interface {
 	AddTorrentFile(ctx context.Context, data []byte) error
 	// GetTorrent reports the state of a torrent by info hash, or ErrNotFound.
 	GetTorrent(ctx context.Context, hash string) (TorrentInfo, error)
+	// RemoveTorrent deletes a torrent from the client. When deleteFiles is
+	// set the downloaded data is deleted as well; otherwise the files are left
+	// on disk (the mover has already hard-linked or copied them into the
+	// library). It returns ErrNotFound when the client does not know the hash.
+	RemoveTorrent(ctx context.Context, hash string, deleteFiles bool) error
 }
 
 // New creates a client by type: "qbittorrent" or "fake".
@@ -96,6 +101,13 @@ func (q *qbittorrentClient) AddTorrentFile(ctx context.Context, data []byte) err
 	options := &qbittorrent.TorrentAddOptions{Paused: false, Category: q.config.Category}
 	if _, err := q.client.AddTorrentFromMemoryCtx(ctx, data, options.Prepare()); err != nil {
 		return fmt.Errorf("failed to add torrent file: %w", err)
+	}
+	return nil
+}
+
+func (q *qbittorrentClient) RemoveTorrent(ctx context.Context, hash string, deleteFiles bool) error {
+	if err := q.client.DeleteTorrentsCtx(ctx, []string{hash}, deleteFiles); err != nil {
+		return fmt.Errorf("failed to remove torrent: %w", err)
 	}
 	return nil
 }
@@ -173,6 +185,23 @@ func (f *fakeClient) register(hash, name string) {
 	}
 }
 
+func (f *fakeClient) RemoveTorrent(ctx context.Context, hash string, deleteFiles bool) error {
+	f.mu.Lock()
+	_, ok := f.added[hash]
+	delete(f.added, hash)
+	delete(f.names, hash)
+	f.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrNotFound, hash)
+	}
+	if deleteFiles {
+		if err := os.RemoveAll(fakeContentDir(hash)); err != nil {
+			return fmt.Errorf("failed to delete torrent data: %w", err)
+		}
+	}
+	return nil
+}
+
 func (f *fakeClient) GetTorrent(ctx context.Context, hash string) (TorrentInfo, error) {
 	f.mu.Lock()
 	added, ok := f.added[hash]
@@ -213,7 +242,7 @@ func MagnetDisplayName(magnet string) string {
 // season names get SxxExx files so the season-pack import path is exercised
 // too; everything else becomes a single feature file.
 func fakeContent(hash, name string) (string, error) {
-	dir := filepath.Join(os.TempDir(), "downloadarr-lite-fake", hash)
+	dir := fakeContentDir(hash)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", err
 	}
@@ -242,6 +271,11 @@ func fakeContent(hash, name string) (string, error) {
 		}
 	}
 	return dir, nil
+}
+
+// fakeContentDir is where the fake client materialises a torrent's files.
+func fakeContentDir(hash string) string {
+	return filepath.Join(os.TempDir(), "downloadarr-lite-fake", hash)
 }
 
 // ──────────────────────────────────────────────────────────────

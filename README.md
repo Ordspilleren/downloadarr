@@ -32,7 +32,10 @@ searches TMDB and replaces the guess with a canonical title (and, for TV,
 fetches episode titles from the matched season). The user can correct the match
 from the download card at any time before the import. Downloads live in memory
 only, so the list is empty after a restart (any torrent still in the client
-keeps downloading; re-add its magnet to import it).
+keeps downloading; re-add its magnet to import it). Each download offers two
+actions: **Clear** forgets the entry in memory but leaves the torrent alone in
+the client (so it keeps downloading or seeding), while **Delete** removes the
+torrent from the client and asks whether its files should be deleted too.
 
 ## Layout
 
@@ -91,7 +94,8 @@ changes during development.
 |---|---|---|
 | `GET` | `/api/downloads` | current list, newest first |
 | `POST` | `/api/downloads` | add a magnet (`{"magnet": "magnet:?xt=…"}`) or a `.torrent` file (`multipart/form-data` with a `file` field) |
-| `DELETE` | `/api/downloads/:hash` | forget a completed/failed entry |
+| `DELETE` | `/api/downloads/:hash` | clear a download from the list, leaving the torrent in the client |
+| `DELETE` | `/api/downloads/:hash?deleteFromClient=true&deleteFiles=true` | remove a download from the client and forget it; `deleteFiles` (default false) also deletes the data |
 | `PATCH` | `/api/downloads/:hash/match` | correct the metadata: `{"mediaType":"movie","tmdbId":603,"season":0,"episode":0}` (or `title`/`year` for a manual override) |
 | `GET` | `/api/search?type=movie&query=…` | TMDB search for the match editor |
 | `GET` | `/api/status` | `{"metadataEnabled": true|false}` |

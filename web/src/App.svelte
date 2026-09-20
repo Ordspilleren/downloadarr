@@ -108,9 +108,20 @@
     if (file) void uploadFile(file)
   }
 
-  async function remove(hash: string) {
+  // clearDownload forgets a download in the backend without touching the
+  // torrent client, so a running torrent keeps downloading or seeding.
+  async function clearDownload(hash: string) {
     await fetch(`/api/downloads/${hash}`, { method: 'DELETE' })
-    // The removal arrives over the SSE stream below.
+    // The change arrives over the SSE stream below.
+  }
+
+  // deleteDownload removes the torrent from the client; deleteFiles controls
+  // whether its downloaded data is deleted as well. The download card prompts
+  // for that choice before calling this.
+  async function deleteDownload(hash: string, deleteFiles: boolean) {
+    const query = `?deleteFromClient=true&deleteFiles=${deleteFiles}`
+    await fetch(`/api/downloads/${hash}${query}`, { method: 'DELETE' })
+    // The change arrives over the SSE stream below.
   }
 
   onMount(() => {
@@ -199,7 +210,12 @@
       <p class="muted">No downloads yet. Add one above.</p>
     {:else}
       {#each downloads as d (d.hash)}
-        <DownloadCard download={d} {metadataEnabled} onremove={remove} />
+        <DownloadCard
+          download={d}
+          {metadataEnabled}
+          onclear={clearDownload}
+          ondelete={deleteDownload}
+        />
       {/each}
     {/if}
   </section>

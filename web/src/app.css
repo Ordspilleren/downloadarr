@@ -232,6 +232,60 @@ button.file:hover:not(:disabled) {
   color: var(--text);
 }
 
+/* Destructive variant: remove the torrent and delete its data. */
+.remove.danger {
+  color: #ffb3bb;
+}
+
+.remove.danger:hover {
+  color: #ffd0d5;
+}
+
+/* Icon-only variant of the clear and delete actions. */
+.remove.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  padding: 0;
+}
+
+.remove.icon svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+/* Inline prompt asking whether a removed torrent's files should go too.
+   Phone-first: the question sits above full-width choices so nothing is
+   cramped; it collapses to a single row on wider screens (see the query at
+   the end). */
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #14171e;
+}
+
+.confirm-msg {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.confirm-actions button:not(.icon) {
+  flex: 1;
+  min-width: 0;
+}
+
 .link {
   flex-shrink: 0;
   min-height: 40px;
@@ -556,6 +610,20 @@ button.file:hover:not(:disabled) {
 
   .meta .link {
     margin-left: 0;
+  }
+
+  /* The keep/delete choices fit beside the question again. */
+  .confirm {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .confirm-msg {
+    margin-right: auto;
+  }
+
+  .confirm-actions button:not(.icon) {
+    flex: 0 0 auto;
   }
 
   .manual-row {

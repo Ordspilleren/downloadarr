@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -131,9 +132,31 @@ func (s *Server) addTorrentFile(c echo.Context) error {
 	return c.JSON(http.StatusCreated, d)
 }
 
+// removeDownload covers the two ways to take a download off the list. By
+// default it clears the entry, leaving the torrent untouched in the client.
+// With ?deleteFromClient=true it instead removes the torrent from the client;
+// the optional deleteFiles query parameter also deletes the downloaded data.
 func (s *Server) removeDownload(c echo.Context) error {
-	if !s.q.Remove(c.Param("hash")) {
-		return fail(c, http.StatusNotFound, "download not found or still active")
+	hash := c.Param("hash")
+
+	if deleteFromClient, _ := strconv.ParseBool(c.QueryParam("deleteFromClient")); deleteFromClient {
+		deleteFiles, _ := strconv.ParseBool(c.QueryParam("deleteFiles"))
+		switch err := s.q.Delete(hash, deleteFiles); {
+		case errors.Is(err, queue.ErrNotFound):
+			return fail(c, http.StatusNotFound, "download not found")
+		case errors.Is(err, queue.ErrImporting):
+			return fail(c, http.StatusConflict, "download is being imported")
+		case err != nil:
+			return fail(c, http.StatusBadGateway, "could not remove the download from the client")
+		}
+		return c.NoContent(http.StatusNoContent)
+	}
+
+	switch err := s.q.Clear(hash); {
+	case errors.Is(err, queue.ErrNotFound):
+		return fail(c, http.StatusNotFound, "download not found")
+	case errors.Is(err, queue.ErrImporting):
+		return fail(c, http.StatusConflict, "download is being imported")
 	}
 	return c.NoContent(http.StatusNoContent)
 }
