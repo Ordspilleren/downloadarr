@@ -153,11 +153,9 @@
 
 <main>
   <header>
-    <h1>downloadarr<span>-lite</span></h1>
+    <h1>download<span>arr</span></h1>
     <p>
-      Paste a magnet link or upload a .torrent file — you can also drag one
-      onto the page. Metadata is looked up automatically and can be corrected
-      before the finished files are hard-linked into your library.
+      Paste a magnet link or upload a .torrent file.
     </p>
   </header>
 
