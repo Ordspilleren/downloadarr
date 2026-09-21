@@ -609,10 +609,6 @@ button.file:hover:not(:disabled) {
     order: 0;
   }
 
-  .meta .link {
-    margin-left: 0;
-  }
-
   /* The keep/delete choices fit beside the question again. */
   .confirm {
     flex-direction: row;
