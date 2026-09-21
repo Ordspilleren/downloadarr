@@ -7,6 +7,12 @@
   "display": "standalone",
   "background_color": "#0f1115",
   "theme_color": "#0f1115",
+  "protocol_handlers": [
+    {
+      "protocol": "magnet",
+      "url": "/?url=%s"
+    }
+  ],
   "icons": [
     {
       "src": "/icon-192.png",

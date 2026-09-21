@@ -17,18 +17,17 @@
   let connected = $state(false)
   let metadataEnabled = $state(false)
 
-  async function add(event: SubmitEvent) {
-    event.preventDefault()
+  async function submitMagnet(value: string) {
     error = ''
-    const value = magnet.trim()
-    if (!value || submitting || uploading) return
+    const link = value.trim()
+    if (!link || submitting || uploading) return
 
     submitting = true
     try {
       const res = await fetch('/api/downloads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ magnet: value }),
+        body: JSON.stringify({ magnet: link }),
       })
       const body = (await res.json().catch(() => ({}))) as ApiError
       if (!res.ok) throw new Error(body.message || `Request failed (${res.status})`)
@@ -39,6 +38,11 @@
     } finally {
       submitting = false
     }
+  }
+
+  function add(event: SubmitEvent) {
+    event.preventDefault()
+    void submitMagnet(magnet)
   }
 
   // uploadFile sends a .torrent file as multipart form data to the same
@@ -125,6 +129,16 @@
   }
 
   onMount(() => {
+    // When installed as a PWA, magnet links open the app as /?url=<magnet>.
+    // Add the link right away and drop the parameter so a refresh does not
+    // queue it a second time.
+    const protocolUrl = new URLSearchParams(window.location.search).get('url')?.trim()
+    if (protocolUrl && protocolUrl.toLowerCase().startsWith('magnet:')) {
+      magnet = protocolUrl
+      void submitMagnet(protocolUrl)
+      history.replaceState(null, '', window.location.pathname)
+    }
+
     fetch('/api/status')
       .then((res) => (res.ok ? res.json() : null))
       .then((body: StatusResponse | null) => {
