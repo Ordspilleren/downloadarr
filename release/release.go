@@ -99,11 +99,19 @@ func Parse(name string) Info {
 		}
 	}
 
-	// "Show.S01.…": a whole season.
+	// "Show.S01.…" or "Show Season 1 …": a whole season.
 	for i, tok := range tokens {
 		if m := seasonRE.FindStringSubmatch(tok); m != nil {
 			season, _ := strconv.Atoi(m[1])
 			return Info{Kind: KindSeason, Title: cleanShowTitle(tokens[:i]), Season: season}
+		}
+		// The season spelled out ("Prehistoric Planet (2022) Season 1 S01");
+		// require a number after it so titles like "Season of the Witch" stay
+		// movies.
+		if strings.EqualFold(tok, "season") && i+1 < len(tokens) {
+			if n := atoi(tokens[i+1]); n > 0 && n <= 99 {
+				return Info{Kind: KindSeason, Title: cleanShowTitle(tokens[:i]), Season: n}
+			}
 		}
 	}
 

@@ -76,6 +76,23 @@ func TestParse(t *testing.T) {
 			in:   "Grand.Theft.Auto.VI.An.Extended.Look.2026.2160p.NF.WEB-DL.DDP5.1.H.265",
 			want: Info{Kind: KindMovie, Title: "Grand Theft Auto VI An Extended Look", Year: 2026},
 		},
+		{
+			// The season is spelled out and the show name carries its year.
+			name: "spelled-out season pack",
+			in:   "Prehistoric Planet (2022) Season 1 S01 (1080p ATVP WEB-DL x265 HEVC 10bit EAC3 5.1 Silence) [QxR]",
+			want: Info{Kind: KindSeason, Title: "Prehistoric Planet", Season: 1},
+		},
+		{
+			name: "spelled-out season without Sxx",
+			in:   "Some Show Season 2 1080p WEB-DL",
+			want: Info{Kind: KindSeason, Title: "Some Show", Season: 2},
+		},
+		{
+			// "Season" here starts a movie title, not a season marker.
+			name: "season word in a movie title",
+			in:   "Season of the Witch 2011 1080p BluRay",
+			want: Info{Kind: KindMovie, Title: "Season of the Witch", Year: 2011},
+		},
 	}
 
 	for _, tt := range tests {
