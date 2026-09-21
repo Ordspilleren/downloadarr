@@ -246,6 +246,7 @@ button.file:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   width: 40px;
   padding: 0;
 }

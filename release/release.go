@@ -39,13 +39,16 @@ type Info struct {
 var (
 	// separators split a release name into tokens. Hyphens are deliberately
 	// kept: they are part of release tags ("WEB-DL") and of many titles
-	// ("Spider-Man"), while dots, underscores, plus signs and whitespace are
-	// the usual stand-ins for spaces.
-	separatorRE = regexp.MustCompile(`[\s._+]+`)
+	// ("Spider-Man"), while dots, underscores, plus signs, whitespace and the
+	// brackets scene releases wrap tags in ("[1080p] [WEBRip] [YTS.GG]",
+	// "(2026)") are the usual stand-ins for spaces.
+	separatorRE = regexp.MustCompile(`[\s._+()\[\]]+`)
 
-	episodeRE    = regexp.MustCompile(`(?i)^s(\d{1,2})e(\d{1,3})$`)
-	altEpisodeRE = regexp.MustCompile(`(?i)^(\d{1,2})x(\d{1,3})$`)
-	seasonRE     = regexp.MustCompile(`(?i)^s(\d{1,2})$`)
+	// The episode and season markers may carry a prefix glued on by a hyphen
+	// ("Lioness.2023-S03E06"), so an optional hyphenated prefix is allowed.
+	episodeRE    = regexp.MustCompile(`(?i)^(?:.*-)?s(\d{1,2})e(\d{1,3})$`)
+	altEpisodeRE = regexp.MustCompile(`(?i)^(?:.*-)?(\d{1,2})x(\d{1,3})$`)
+	seasonRE     = regexp.MustCompile(`(?i)^(?:.*-)?s(\d{1,2})$`)
 	yearRE       = regexp.MustCompile(`^(?:19|20)\d{2}$`)
 )
 
@@ -63,8 +66,15 @@ var releaseTags = map[string]bool{
 	"aac": true, "ac3": true, "eac3": true, "dts": true, "dts-hd": true,
 	"truehd": true, "atmos": true, "ddp5": true, "dd5": true, "flac": true,
 	"mp3": true, "opus": true,
-	"proper": true, "repack": true, "extended": true, "unrated": true,
+	"proper": true, "repack": true, "unrated": true,
 	"imax": true, "multi": true, "dual": true, "internal": true, "limited": true,
+
+	// Language tags scene releases put right after the episode marker. They
+	// are not part of an episode title ("…S01E03.ITA.ENG.2160p").
+	"eng": true, "ita": true, "ger": true, "fre": true, "fra": true,
+	"hin": true, "tam": true, "tel": true, "mal": true, "jpn": true,
+	"kor": true, "chi": true, "rus": true, "por": true, "vie": true,
+	"tha": true,
 }
 
 // Parse infers media metadata from a torrent display name. It never fails: an
@@ -81,7 +91,7 @@ func Parse(name string) Info {
 		if season, episode, ok := parseEpisode(tok); ok {
 			return Info{
 				Kind:         KindEpisode,
-				Title:        cleanTitle(tokens[:i]),
+				Title:        cleanShowTitle(tokens[:i]),
 				Season:       season,
 				Episode:      episode,
 				EpisodeTitle: cleanTitle(tokens[i+1:]),
@@ -93,7 +103,7 @@ func Parse(name string) Info {
 	for i, tok := range tokens {
 		if m := seasonRE.FindStringSubmatch(tok); m != nil {
 			season, _ := strconv.Atoi(m[1])
-			return Info{Kind: KindSeason, Title: cleanTitle(tokens[:i]), Season: season}
+			return Info{Kind: KindSeason, Title: cleanShowTitle(tokens[:i]), Season: season}
 		}
 	}
 
@@ -127,6 +137,18 @@ func parseEpisode(tok string) (season, episode int, ok bool) {
 // cleanTitle joins tokens into a title, stopping at the first release tag.
 func cleanTitle(tokens []string) string {
 	return strings.TrimSpace(strings.Join(tokens[:firstTag(tokens)], " "))
+}
+
+// cleanShowTitle joins the tokens before an episode or season marker into a
+// show name. A trailing release year is dropped ("Lanterns.2026.S01E02" →
+// "Lanterns"), but a title that is itself a year is kept, so "1923.S01E01"
+// does not lose its name.
+func cleanShowTitle(tokens []string) string {
+	tokens = tokens[:firstTag(tokens)]
+	if len(tokens) > 1 && yearRE.MatchString(tokens[len(tokens)-1]) {
+		tokens = tokens[:len(tokens)-1]
+	}
+	return strings.TrimSpace(strings.Join(tokens, " "))
 }
 
 // firstTag returns the index of the first release tag in tokens, or len(tokens)
