@@ -1,10 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import DownloadCard from './DownloadCard.svelte'
-  import { errorMessage, type ApiError, type Download, type StatusResponse } from './types'
+  import TrackerLinks from './TrackerLinks.svelte'
+  import { isMagnetLink } from './tracker'
+  import {
+    errorMessage,
+    type ApiError,
+    type Download,
+    type StatusResponse,
+    type Tracker,
+  } from './types'
 
   let downloads = $state<Download[]>([])
   let magnet = $state('')
+  let trackers = $state<Tracker[]>([])
   let submitting = $state(false)
   let uploading = $state(false)
   let dragging = $state(false)
@@ -17,10 +26,17 @@
   let connected = $state(false)
   let metadataEnabled = $state(false)
 
+  // The add field is dual-purpose: a magnet link downloads, anything else is a
+  // keyword search that yields live tracker links.
+  const value = $derived(magnet.trim())
+  const isMagnet = $derived(isMagnetLink(magnet))
+  const isQuery = $derived(value.length > 0 && !isMagnet)
+
   async function submitMagnet(value: string) {
     error = ''
     const link = value.trim()
-    if (!link || submitting || uploading) return
+    // Enter in query mode must not POST; only a magnet is a download.
+    if (!link || !isMagnetLink(link) || submitting || uploading) return
 
     submitting = true
     try {
@@ -146,6 +162,13 @@
       })
       .catch(() => {})
 
+    fetch('/api/trackers')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: Tracker[] | null) => {
+        if (body) trackers = body
+      })
+      .catch(() => {})
+
     const source = new EventSource('/api/events')
 
     source.onopen = () => {
@@ -188,12 +211,12 @@
     <input
       type="text"
       bind:value={magnet}
-      placeholder="magnet:?xt=urn:btih:…"
+      placeholder="Paste a magnet link or type to search trackers"
       autocomplete="off"
       spellcheck="false"
-      aria-label="Magnet link"
+      aria-label="Magnet link or search keywords"
     />
-    <button type="submit" disabled={submitting || uploading || !magnet.trim()}>
+    <button type="submit" disabled={submitting || uploading || !isMagnet}>
       {submitting ? 'Adding…' : 'Download'}
     </button>
     <button
@@ -213,7 +236,11 @@
     />
   </form>
 
-  {#if error}
+  {#if isQuery}
+    <TrackerLinks query={value} {trackers} />
+  {/if}
+
+  {#if error && !isQuery}
     <p class="error">{error}</p>
   {/if}
 

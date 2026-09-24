@@ -22,9 +22,10 @@ import (
 
 // Server owns the HTTP lifecycle.
 type Server struct {
-	echo *echo.Echo
-	q    *queue.Queue
-	meta *metadata.Client
+	echo     *echo.Echo
+	q        *queue.Queue
+	meta     *metadata.Client
+	trackers []Tracker
 
 	// ctx is cancelled by Stop. Long-lived handlers (the SSE stream) select on
 	// it so they return promptly instead of making Shutdown wait out its
@@ -33,9 +34,15 @@ type Server struct {
 	cancel context.CancelFunc
 }
 
+// Tracker is a tracker search endpoint exposed to the web interface.
+type Tracker struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
 // New builds the server: /api/downloads backs the web interface, and every
 // other path is served from webFS (the embedded SPA).
-func New(q *queue.Queue, meta *metadata.Client, webFS fs.FS) *Server {
+func New(q *queue.Queue, meta *metadata.Client, webFS fs.FS, trackers []Tracker) *Server {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
@@ -45,7 +52,7 @@ func New(q *queue.Queue, meta *metadata.Client, webFS fs.FS) *Server {
 	e.Use(middleware.BodyLimit("10M"))
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Server{echo: e, q: q, meta: meta, ctx: ctx, cancel: cancel}
+	s := &Server{echo: e, q: q, meta: meta, trackers: trackers, ctx: ctx, cancel: cancel}
 	api := e.Group("/api")
 	api.GET("/downloads", s.listDownloads)
 	api.POST("/downloads", s.addDownload)
@@ -53,6 +60,7 @@ func New(q *queue.Queue, meta *metadata.Client, webFS fs.FS) *Server {
 	api.PATCH("/downloads/:hash/match", s.setMatch)
 	api.GET("/search", s.search)
 	api.GET("/status", s.status)
+	api.GET("/trackers", s.listTrackers)
 	api.GET("/events", s.streamEvents)
 	e.GET("/*", spaHandler(webFS))
 
@@ -201,6 +209,16 @@ func (s *Server) search(c echo.Context) error {
 // status tells the web interface which optional integrations are active.
 func (s *Server) status(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]bool{"metadataEnabled": s.meta.Enabled()})
+}
+
+// listTrackers returns the configured tracker search endpoints. The slice is
+// normalized to an empty one so the JSON is [] when none are configured.
+func (s *Server) listTrackers(c echo.Context) error {
+	trackers := s.trackers
+	if trackers == nil {
+		trackers = []Tracker{}
+	}
+	return c.JSON(http.StatusOK, trackers)
 }
 
 // streamEvents pushes the full download list over Server-Sent Events whenever

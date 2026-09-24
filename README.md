@@ -99,6 +99,7 @@ changes during development.
 | `PATCH` | `/api/downloads/:hash/match` | correct the metadata: `{"mediaType":"movie","tmdbId":603,"season":0,"episode":0}` (or `title`/`year` for a manual override) |
 | `GET` | `/api/search?type=movie&query=…` | TMDB search for the match editor |
 | `GET` | `/api/status` | `{"metadataEnabled": true|false}` |
+| `GET` | `/api/trackers` | `[{"name":"…","url":"…"}]` tracker search endpoints, `[]` when unset |
 | `GET` | `/api/events` | SSE stream: the full list on every change, plus keep-alive comments |
 
 ## Configuration
@@ -121,6 +122,15 @@ metadata:
     # alone. Accepts a v3 API key or a v4 bearer token.
     api_key: ""
 
+trackers:
+  # Optional. While the add field contains keywords instead of a magnet link,
+  # the UI links into each tracker below. "{query}" is replaced with the
+  # URL-encoded keywords.
+  - name: Example Tracker
+    url: "https://tracker.example/search?q={query}"
+  - name: Another Tracker
+    url: "https://another.example/browse.php?search={query}&order=seeders"
+
 media_paths:
   movies:
     path: /media/movies
@@ -129,6 +139,15 @@ media_paths:
     path: /media/tv
     template: '{{.ShowName}}/Season {{.SeasonNumber | padZeros}}/{{.ShowName}} - S{{.SeasonNumber | padZeros}}E{{.EpisodeNumber | padZeros}}{{if .EpisodeTitle}} - {{.EpisodeTitle}}{{end}}'
 ```
+
+### Tracker search
+
+The add field is dual-purpose: a value starting with `magnet:` downloads as
+before, while any other non-empty value is treated as keywords and shows a
+live list of tracker search links below the form. Each tracker comes from the
+top-level `trackers` list above, and every `{query}` in its `url` is replaced
+with the URL-encoded keywords. The Download button is disabled outside magnet
+mode. Trackers are optional; with none configured, query mode shows a hint.
 
 Path templates are Go templates. Available fields are:
 

@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -17,6 +18,14 @@ type Config struct {
 	Downloader DownloaderConfig `yaml:"downloader"`
 	MediaPaths MediaPathsConfig `yaml:"media_paths"`
 	Metadata   MetadataConfig   `yaml:"metadata"`
+	Trackers   []TrackerConfig  `yaml:"trackers"`
+}
+
+// TrackerConfig is one tracker search endpoint shown during keyword search.
+// URL must contain "{query}".
+type TrackerConfig struct {
+	Name string `yaml:"name"`
+	URL  string `yaml:"url"`
 }
 
 // MetadataConfig holds the optional metadata-provider settings.
@@ -140,6 +149,17 @@ func (c *Config) Validate() error {
 		}
 		if media.cfg.Template == "" {
 			return fmt.Errorf("media_paths.%s.template is required", media.name)
+		}
+	}
+	for i, tracker := range c.Trackers {
+		if tracker.Name == "" {
+			return fmt.Errorf("trackers[%d].name is required", i)
+		}
+		if tracker.URL == "" {
+			return fmt.Errorf("trackers[%d].url is required", i)
+		}
+		if !strings.Contains(tracker.URL, "{query}") {
+			return fmt.Errorf("trackers[%d].url must contain \"{query}\"", i)
 		}
 	}
 	return nil

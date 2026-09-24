@@ -55,7 +55,11 @@ func main() {
 
 	tmdb := metadata.New(cfg.Metadata.TMDB.APIKey)
 	q := queue.New(client, mover, tmdb, cfg.Downloader.PollInterval.Std())
-	srv := server.New(q, tmdb, webui.FS())
+	trackers := make([]server.Tracker, 0, len(cfg.Trackers))
+	for _, t := range cfg.Trackers {
+		trackers = append(trackers, server.Tracker{Name: t.Name, URL: t.URL})
+	}
+	srv := server.New(q, tmdb, webui.FS(), trackers)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

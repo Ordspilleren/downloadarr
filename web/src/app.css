@@ -323,6 +323,75 @@ button.file:hover:not(:disabled) {
   font-size: 13px;
 }
 
+/* ── tracker search links ───────────────────────────────────── */
+
+.trackers {
+  margin-top: 16px;
+}
+
+.tracker-heading {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracker-heading strong {
+  color: var(--text);
+}
+
+.tracker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.tracker {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.tracker:hover {
+  border-color: var(--accent);
+}
+
+.tracker-name {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracker-url {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.trackers code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #232838;
+  font-size: 12px;
+}
+
 /* ── drag and drop ─────────────────────────────────────────── */
 
 /* Full-viewport hint shown while a file is dragged over the page. It must not

@@ -60,6 +60,12 @@ export interface StatusResponse {
   metadataEnabled: boolean
 }
 
+// Tracker is a tracker search endpoint served by GET /api/trackers.
+export interface Tracker {
+  name: string
+  url: string
+}
+
 // ApiError is the shape the server returns for failed requests.
 export interface ApiError {
   message?: string

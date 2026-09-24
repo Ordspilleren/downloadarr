@@ -27,3 +27,12 @@ media_paths:
     # {{.ShowName}}, {{.SeasonNumber}}, {{.EpisodeNumber}} and {{.EpisodeTitle}}
     # are available; the padZeros helper renders 1 as "01".
     template: '{{.ShowName}}/Season {{.SeasonNumber | padZeros}}/{{.ShowName}} - S{{.SeasonNumber | padZeros}}E{{.EpisodeNumber | padZeros}}{{if .EpisodeTitle}} - {{.EpisodeTitle}}{{end}}'
+
+# Optional. While the add field contains keywords instead of a magnet link, the
+# web interface shows a link into each tracker below. "{query}" is replaced
+# with the URL-encoded keywords.
+trackers:
+  # - name: Example Tracker
+  #   url: "https://tracker.example/search?q={query}"
+  # - name: Another Tracker
+  #   url: "https://another.example/browse.php?search={query}&order=seeders"
