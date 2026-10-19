@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Ordspilleren/downloadarr-lite/metadata"
-	"github.com/Ordspilleren/downloadarr-lite/release"
+	"github.com/Ordspilleren/downloadarr/metadata"
+	"github.com/Ordspilleren/downloadarr/release"
 )
 
 // seedMatch turns a parsed release name into the initial metadata guess.

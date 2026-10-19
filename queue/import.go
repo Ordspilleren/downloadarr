@@ -3,8 +3,8 @@ package queue
 import (
 	"log"
 
-	"github.com/Ordspilleren/downloadarr-lite/mediamover"
-	"github.com/Ordspilleren/downloadarr-lite/metadata"
+	"github.com/Ordspilleren/downloadarr/mediamover"
+	"github.com/Ordspilleren/downloadarr/metadata"
 )
 
 // importContent moves a completed download into the library using its matched

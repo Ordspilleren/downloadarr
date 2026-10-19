@@ -17,7 +17,7 @@ import (
 
 	"github.com/autobrr/go-qbittorrent"
 
-	"github.com/Ordspilleren/downloadarr-lite/release"
+	"github.com/Ordspilleren/downloadarr/release"
 )
 
 // ErrNotFound is returned by GetTorrent while the client does not (yet) know a
@@ -275,7 +275,7 @@ func fakeContent(hash, name string) (string, error) {
 
 // fakeContentDir is where the fake client materialises a torrent's files.
 func fakeContentDir(hash string) string {
-	return filepath.Join(os.TempDir(), "downloadarr-lite-fake", hash)
+	return filepath.Join(os.TempDir(), "downloadarr-fake", hash)
 }
 
 // ──────────────────────────────────────────────────────────────

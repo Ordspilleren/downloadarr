@@ -1,6 +1,6 @@
-# downloadarr-lite
+# downloadarr
 
-A deliberately small version of `downloadarr`: paste a magnet link or upload
+A deliberately small torrent importer: paste a magnet link or upload
 a `.torrent` file (or drag one onto the page) in the web UI, a torrent client
 downloads it, and the mover hard-links the finished files into your movie or TV
 library. There is no indexer, no database and no ranking. TMDB integration is
@@ -41,7 +41,7 @@ torrent from the client and asks whether its files should be deleted too.
 
 | Package | Responsibility |
 |---|---|
-| `cmd/downloadarr-lite` | composition root: config → wiring → start/stop |
+| `cmd/downloadarr` | composition root: config → wiring → start/stop |
 | `config` | YAML loading, defaults and validation |
 | `downloader` | qBittorrent client, a dev `fake` client, magnet/torrent info-hash parsing |
 | `mediamover` | hard-links (or copies) finished content; template paths |
@@ -59,7 +59,7 @@ Build it first (requires Bun), then build the Go binary:
 
 ```sh
 make build          # cd web && bun install && bun run check && bun run build, then go build
-./bin/downloadarr-lite -config config.yaml
+./bin/downloadarr -config config.yaml
 ```
 
 `make web` builds just the frontend. It must be built before the Go build:
@@ -73,13 +73,13 @@ drag one onto the page.
 
 Set `downloader.type: fake` in `config.yaml`. A fake torrent completes after a
 few seconds and materialises episode- or movie-shaped files under
-`$TMPDIR/downloadarr-lite-fake/`, so the whole flow can be exercised offline.
+`$TMPDIR/downloadarr-fake/`, so the whole flow can be exercised offline.
 
 ### Frontend development
 
 ```sh
 # terminal 1: Go backend on :8080
-go run ./cmd/downloadarr-lite
+go run ./cmd/downloadarr
 # terminal 2: Vite dev server on :5173 (proxies /api to :8080)
 cd web && bun run dev
 ```
@@ -113,7 +113,7 @@ downloader:
   url: "http://localhost:8080"
   username: admin
   password: adminadmin
-  category: downloadarr-lite
+  category: downloadarr
   poll_interval: 2s
 
 metadata:

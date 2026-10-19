@@ -1,4 +1,4 @@
-module github.com/Ordspilleren/downloadarr-lite
+module github.com/Ordspilleren/downloadarr
 
 go 1.27.0
 

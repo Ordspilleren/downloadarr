@@ -16,7 +16,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend /app/internal/webui/dist ./internal/webui/dist
-RUN CGO_ENABLED=0 go build -o bin/downloadarr-lite ./cmd/downloadarr-lite
+RUN CGO_ENABLED=0 go build -o bin/downloadarr ./cmd/downloadarr
 
 # --- Runtime ----------------------------------------------------------------
 FROM alpine:3.24
@@ -25,8 +25,8 @@ RUN apk add --no-cache ca-certificates tzdata \
     && adduser -S -D -u 1000 -G downloadarr downloadarr \
     && mkdir -p /app \
     && chown -R downloadarr:downloadarr /app
-COPY --from=backend /app/bin/downloadarr-lite /usr/local/bin/downloadarr-lite
+COPY --from=backend /app/bin/downloadarr /usr/local/bin/downloadarr
 USER downloadarr
 WORKDIR /app
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/downloadarr-lite"]
+ENTRYPOINT ["/usr/local/bin/downloadarr"]

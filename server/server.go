@@ -16,8 +16,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
-	"github.com/Ordspilleren/downloadarr-lite/metadata"
-	"github.com/Ordspilleren/downloadarr-lite/queue"
+	"github.com/Ordspilleren/downloadarr/metadata"
+	"github.com/Ordspilleren/downloadarr/queue"
 )
 
 // Server owns the HTTP lifecycle.

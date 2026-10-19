@@ -9,7 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/Ordspilleren/downloadarr-lite/mediamover"
+	"github.com/Ordspilleren/downloadarr/mediamover"
 )
 
 // Config is the root configuration.

@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Ordspilleren/downloadarr-lite/downloader"
-	"github.com/Ordspilleren/downloadarr-lite/mediamover"
-	"github.com/Ordspilleren/downloadarr-lite/metadata"
-	"github.com/Ordspilleren/downloadarr-lite/release"
+	"github.com/Ordspilleren/downloadarr/downloader"
+	"github.com/Ordspilleren/downloadarr/mediamover"
+	"github.com/Ordspilleren/downloadarr/metadata"
+	"github.com/Ordspilleren/downloadarr/release"
 )
 
 // ErrDuplicate is returned by Add when the info hash is already tracked.

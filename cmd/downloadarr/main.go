@@ -1,4 +1,4 @@
-// Command downloadarr-lite is a tiny web app for importing torrents: paste a
+// Command downloadarr is a tiny web app for importing torrents: paste a
 // magnet link or upload a .torrent file, the torrent client downloads it, and
 // the mover hard-links the finished content into the movie or TV library.
 package main
@@ -13,14 +13,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Ordspilleren/downloadarr-lite/config"
-	"github.com/Ordspilleren/downloadarr-lite/downloader"
-	"github.com/Ordspilleren/downloadarr-lite/internal/fsutil"
-	"github.com/Ordspilleren/downloadarr-lite/internal/webui"
-	"github.com/Ordspilleren/downloadarr-lite/mediamover"
-	"github.com/Ordspilleren/downloadarr-lite/metadata"
-	"github.com/Ordspilleren/downloadarr-lite/queue"
-	"github.com/Ordspilleren/downloadarr-lite/server"
+	"github.com/Ordspilleren/downloadarr/config"
+	"github.com/Ordspilleren/downloadarr/downloader"
+	"github.com/Ordspilleren/downloadarr/internal/fsutil"
+	"github.com/Ordspilleren/downloadarr/internal/webui"
+	"github.com/Ordspilleren/downloadarr/mediamover"
+	"github.com/Ordspilleren/downloadarr/metadata"
+	"github.com/Ordspilleren/downloadarr/queue"
+	"github.com/Ordspilleren/downloadarr/server"
 )
 
 func main() {
@@ -72,7 +72,7 @@ func main() {
 		}
 		errCh <- nil
 	}()
-	log.Printf("downloadarr-lite listening on %s", cfg.General.ListenAddr)
+	log.Printf("downloadarr listening on %s", cfg.General.ListenAddr)
 
 	select {
 	case err := <-errCh:

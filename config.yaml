@@ -7,7 +7,7 @@ downloader:
   url: "http://localhost:8080"
   username: admin
   password: adminadmin
-  category: downloadarr-lite
+  category: downloadarr
   poll_interval: 2s
 
 metadata:
